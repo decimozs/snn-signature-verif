@@ -1,0 +1,11 @@
+[project]
+name = "worker"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi[standard]>=0.129.0",
+    "numpy>=2.4.2",
+    "opencv-python>=4.13.0.92",
+]

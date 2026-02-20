@@ -1,0 +1,51 @@
+# --- Python Bytecode & Cache ---
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# --- Virtual Environments (Crucial) ---
+.venv/
+venv/
+env/
+ENV/
+bin/
+lib/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.installed.cfg
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+
+# --- OpenCV & Media (Local Testing) ---
+*.jpg
+*.jpeg
+*.png
+*.mp4
+*.avi
+!samples/
+
+# --- Machine Learning Models ---
+*.pth
+*.pt
+*.onnx
+*.h5
+*.pb
+*.weights
+*.tflite
+models/
+
+# --- Environment & Secrets ---
+.env
+.flaskenv
+secrets.py
+
+
+*.swp
