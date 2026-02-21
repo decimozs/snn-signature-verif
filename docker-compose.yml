@@ -1,0 +1,240 @@
+volumes:
+  n8n_storage:
+  postgres_storage:
+  ollama_storage:
+  qdrant_storage:
+  docling_data:
+
+networks:
+  snn-signature-verif:
+
+x-n8n: &service-n8n
+  image: n8nio/n8n:latest
+  networks: ["snn-signature-verif"]
+  environment:
+    - DB_TYPE=postgresdb
+    - DB_POSTGRESDB_HOST=postgres
+    - DB_POSTGRESDB_USER=${POSTGRES_USER}
+    - DB_POSTGRESDB_PASSWORD=${POSTGRES_PASSWORD}
+    - DB_POSTGRESDB_DATABASE=${N8N_POSTGRES_DB}
+    - N8N_DIAGNOSTICS_ENABLED=false
+    - N8N_PERSONALIZATION_ENABLED=false
+    - N8N_ENCRYPTION_KEY
+    - N8N_USER_MANAGEMENT_JWT_SECRET
+    - OLLAMA_HOST=${OLLAMA_HOST:-ollama:11434}
+    - N8N_RESTRICT_FILE_ACCESS_TO=/shared
+    - NODES_EXCLUDE=[]
+  env_file:
+    - path: .env
+      required: true
+
+x-ollama: &service-ollama
+  image: ollama/ollama:latest
+  networks: ["snn-signature-verif"]
+  restart: unless-stopped
+  ports:
+    - 11434:11434
+  volumes:
+    - ollama_storage:/root/.ollama
+
+x-init-ollama: &init-ollama
+  image: ollama/ollama:latest
+  networks: ["snn-signature-verif"]
+  volumes:
+    - ollama_storage:/root/.ollama
+  entrypoint: /bin/sh
+  environment:
+    - OLLAMA_HOST=ollama:11434
+  command:
+    - "-c"
+    - "sleep 3; ollama pull llama3.2"
+
+x-docling: &service-docling
+  image: ghcr.io/docling-project/docling-serve:main
+  networks: ["snn-signature-verif"]
+  restart: unless-stopped
+  user: root
+  working_dir: /shared/docling
+  expose:
+    - 5001/tcp
+  ports:
+    - 5001:5001
+  environment:
+    - DOCLING_SERVE_ENABLE_UI=true
+    - DOCLING_SERVE_SCRATCH_PATH=/shared/docling
+    - DOCLING_SERVE_SINGLE_USE_RESULTS=false
+    - GRADIO_ALLOWED_PATHS=/shared
+    - GRADIO_TEMP_DIR=/shared/docling
+    - DOCLING_SERVE_ENABLE_REMOTE_SERVICES=true
+    - DOCLING_SERVE_MAX_SYNC_WAIT=600
+  volumes:
+    - docling_data:/data
+    - ./shared:/shared
+  healthcheck:
+    test: ["CMD", "curl", "-f", "http://localhost:5001/health"]
+    interval: 30s
+    timeout: 10s
+    retries: 3
+    start_period: 60s
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    hostname: postgres
+    networks: ["snn-signature-verif"]
+    restart: unless-stopped
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=postgres
+      - N8N_POSTGRES_DB=${N8N_POSTGRES_DB}
+      - APP_POSTGRES_DB=${APP_POSTGRES_DB}
+    volumes:
+      - postgres_storage:/var/lib/postgresql/data
+      - ./init.sh:/docker-entrypoint-initdb.d/init.sh
+    healthcheck:
+      test:
+        ["CMD-SHELL", "pg_isready -h localhost -U ${POSTGRES_USER} -d postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  n8n-import:
+    <<: *service-n8n
+    hostname: n8n-import
+    user: root
+    entrypoint: /bin/sh
+    command:
+      - "-c"
+      - |
+        if [ -f /data/.imported ]; then
+          echo "Data already imported - skipping"
+        else
+          echo "First run detected - importing..."
+          n8n import:credentials --separate --input=/data/credentials
+          n8n import:workflow --separate --input=/data/workflows
+          touch /data/.imported
+          echo "Import complete"
+        fi
+    volumes:
+      - ./n8n/data:/data
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  n8n:
+    <<: *service-n8n
+    hostname: n8n
+    restart: unless-stopped
+    user: root
+    ports:
+      - 5678:5678
+    volumes:
+      - n8n_storage:/home/node/.n8n
+      - ./n8n/data:/data
+      - ./shared:/shared
+      - ./shared/rag:/rag
+    depends_on:
+      postgres:
+        condition: service_healthy
+      n8n-import:
+        condition: service_completed_successfully
+
+  qdrant:
+    image: qdrant/qdrant
+    hostname: qdrant
+    networks: ["snn-signature-verif"]
+    restart: unless-stopped
+    ports:
+      - 6333:6333
+    volumes:
+      - qdrant_storage:/qdrant/storage
+
+  static-files:
+    image: nginx:alpine
+    hostname: static-files
+    networks: ["snn-signature-verif"]
+    restart: unless-stopped
+    ports:
+      - 8080:80
+    volumes:
+      - ./shared:/usr/share/nginx/html:ro
+    command: |
+      sh -c "echo 'server {
+        listen 80;
+        root /usr/share/nginx/html;
+        autoindex on;
+        location / {
+          try_files \$$uri \$$uri/ =404;
+          add_header Access-Control-Allow-Origin *;
+        }
+      }' > /etc/nginx/conf.d/default.conf && nginx -g 'daemon off;'"
+
+  ollama-cpu:
+    profiles: ["cpu"]
+    <<: *service-ollama
+
+  ollama-gpu:
+    profiles: ["gpu-nvidia"]
+    <<: *service-ollama
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
+  ollama-gpu-amd:
+    profiles: ["gpu-amd"]
+    <<: *service-ollama
+    image: ollama/ollama:rocm
+    devices:
+      - "/dev/kfd"
+      - "/dev/dri"
+
+  ollama-pull-llama-cpu:
+    profiles: ["cpu"]
+    <<: *init-ollama
+    depends_on:
+      - ollama-cpu
+
+  ollama-pull-llama-gpu:
+    profiles: ["gpu-nvidia"]
+    <<: *init-ollama
+    depends_on:
+      - ollama-gpu
+
+  ollama-pull-llama-gpu-amd:
+    profiles: [gpu-amd]
+    <<: *init-ollama
+    image: ollama/ollama:rocm
+    depends_on:
+      - ollama-gpu-amd
+
+  docling-cpu:
+    profiles: ["cpu"]
+    <<: *service-docling
+    networks:
+      snn-signature-verif:
+        aliases:
+          - docling
+
+  docling-gpu:
+    profiles: ["gpu-nvidia"]
+    <<: *service-docling
+    image: ghcr.io/docling-project/docling-serve-cu126:main
+    runtime: nvidia
+
+  docling-gpu-amd:
+    profiles: ["gpu-amd"]
+    <<: *service-docling
+    image: ghcr.io/docling-project/docling-serve-rocm:main
+    devices:
+      - /dev/kfd:/dev/kfd
+      - /dev/dri:/dev/dri
+    group_add:
+      - 44
+      - 109
