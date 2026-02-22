@@ -1,16 +1,23 @@
 import { getAllSignatures, getSignatureById } from "@/api/signature-api";
-import { useQuery } from "@tanstack/react-query";
+import { queryOptions, useQuery } from "@tanstack/react-query";
+
+export const signatureQueries = {
+  getAll: () =>
+    queryOptions({
+      queryKey: ["signatures"],
+      queryFn: getAllSignatures,
+    }),
+  getById: (id: string) =>
+    queryOptions({
+      queryKey: ["signature", id],
+      queryFn: () => getSignatureById(id),
+    }),
+};
 
 export const useGetAllSignatures = () => {
-  return useQuery({
-    queryKey: ["signatures"],
-    queryFn: getAllSignatures,
-  });
+  return useQuery(signatureQueries.getAll());
 };
 
 export const useGetSignatureById = (id: string) => {
-  return useQuery({
-    queryKey: ["signature", id],
-    queryFn: () => getSignatureById(id),
-  });
+  return useQuery(signatureQueries.getById(id));
 };

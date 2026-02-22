@@ -1,16 +1,13 @@
 import { pgTable, text } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
 import { baseSchema } from "@/utils";
+import { verifications } from "./verifications";
 
 export const signatures = pgTable("signatures", {
   ...baseSchema,
   name: text("name").notNull(),
   imageUrl: text("image_url").notNull(),
 });
-
-export const signaturesRelations = relations(signatures, ({ many }) => ({
-  logs: many(signatureLogs),
-}));
 
 export const signatureLogs = pgTable("signature_logs", {
   ...baseSchema,
@@ -20,6 +17,11 @@ export const signatureLogs = pgTable("signature_logs", {
   imageUrl: text("image_url").notNull(),
   type: text("type").notNull(),
 });
+
+export const signaturesRelations = relations(signatures, ({ many }) => ({
+  logs: many(signatureLogs),
+  verifications: many(verifications),
+}));
 
 export const signatureLogsRelations = relations(signatureLogs, ({ one }) => ({
   signature: one(signatures, {

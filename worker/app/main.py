@@ -1,6 +1,6 @@
 from fastapi import APIRouter, FastAPI, HTTPException, UploadFile, File
-from service.processor import SignatureProcessor
-from service.analyzer import SignatureAnalyzer
+from app.service.processor import SignatureProcessor
+from app.service.analyzer import SignatureAnalyzer
 import uuid
 
 app = FastAPI(
@@ -89,6 +89,7 @@ async def verify_signature(
         is_authentic = similarity_score > 0.20
 
         return {
+            "id": str(uuid.uuid4()),
             "is_authentic": is_authentic,
             "similarity_score": round(similarity_score, 4),
         }

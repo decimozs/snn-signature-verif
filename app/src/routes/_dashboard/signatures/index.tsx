@@ -8,7 +8,7 @@ import {
 } from "@/components/ui/empty";
 import { Signature } from "lucide-react";
 
-export const Route = createFileRoute("/_dashboard/")({
+export const Route = createFileRoute("/_dashboard/signatures/")({
   component: RouteComponent,
 });
 

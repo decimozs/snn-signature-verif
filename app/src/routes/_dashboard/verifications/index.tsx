@@ -6,9 +6,9 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from "@/components/ui/empty";
-import { Signature } from "lucide-react";
+import { ShieldCheck } from "lucide-react";
 
-export const Route = createFileRoute("/_dashboard/")({
+export const Route = createFileRoute("/_dashboard/verifications/")({
   component: RouteComponent,
 });
 
@@ -18,12 +18,12 @@ function RouteComponent() {
       <Empty>
         <EmptyHeader>
           <EmptyMedia variant="icon">
-            <Signature />
+            <ShieldCheck />
           </EmptyMedia>
-          <EmptyTitle>No Signature Selected</EmptyTitle>
-          <EmptyDescription>
-            Choose a record from the sidebar to inspect original images, ROI
-            extractions, and normalization results.
+          <EmptyTitle>No Verification Selected</EmptyTitle>
+          <EmptyDescription className="">
+            Select a verification attempt from the history sidebar to review
+            similarity scores, authenticity verdicts, and vector comparisons.
           </EmptyDescription>
         </EmptyHeader>
       </Empty>

@@ -26,10 +26,35 @@ const app = new Hono({ strict: false })
     const { id } = c.req.param();
     const data = await db.query.signatures.findFirst({
       where: (sig, { eq }) => eq(sig.id, id),
+      with: {
+        logs: true,
+        verifications: true,
+      },
     });
 
     if (!data) {
       return c.json({ error: "Signature not found" }, 404);
+    }
+
+    return c.json(data);
+  })
+  .get("/verifications", async (c) => {
+    const data = await db.query.verifications.findMany({
+      orderBy: (sig, { desc }) => [desc(sig.createdAt)],
+    });
+    return c.json(data);
+  })
+  .get("/verifications/:id", async (c) => {
+    const { id } = c.req.param();
+    const data = await db.query.verifications.findFirst({
+      where: (sig, { eq }) => eq(sig.id, id),
+      with: {
+        signature: true,
+      },
+    });
+
+    if (!data) {
+      return c.json({ error: "Verification not found" }, 404);
     }
 
     return c.json(data);
